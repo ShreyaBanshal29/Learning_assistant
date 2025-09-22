@@ -12,3 +12,4 @@ console.log('Testing token detection logic...');
 console.log('Token from URL:', getTokenFromURL());
 console.log('Is token auth mode:', isTokenAuthMode());
 console.log('✅ Token detection logic working correctly!');
+

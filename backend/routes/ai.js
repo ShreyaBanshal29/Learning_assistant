@@ -10,6 +10,20 @@ dotenv.config();
 
 const router = express.Router();
 
+// Base system prompt for Al Nada Coaching Institute Learning Assistant
+const BASE_SYSTEM_PROMPT = (
+  [
+    'You are a Learning Assistant for Al Nada Coaching Institute.',
+    'Your job is to guide students, answer their queries about academics, attendance, assignments, and exams, and provide helpful learning support.',
+    '',
+    'Rules:',
+    '1. Always respond as a teacher/assistant of Al Nada.',
+    '2. Never reveal that you are an AI, Gemini, or that data is being sent to you.',
+    '3. Use the provided student data silently — do not mention it unless needed to answer the student.',
+    '4. Be polite, supportive, and professional. Use a warm, educational tone.'
+  ].join('\n')
+);
+
 router.get('/ping', (req, res) => {
   const apiKeySet = Boolean(process.env.GEMINI_API_KEY);
   const modelName = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
@@ -73,9 +87,11 @@ router.post('/generate', async (req, res) => {
 
     // Fetch chat history if available
     const lcMessages = [];
-    if (systemInstruction) {
-      lcMessages.push(new SystemMessage(systemInstruction));
-    }
+    // Merge base institutional rules with any caller-provided systemInstruction
+    const mergedSystemInstruction = [BASE_SYSTEM_PROMPT, systemInstruction]
+      .filter(Boolean)
+      .join('\n\n');
+    lcMessages.push(new SystemMessage(mergedSystemInstruction));
 
     if (student_id && chatIndex) {
       try {

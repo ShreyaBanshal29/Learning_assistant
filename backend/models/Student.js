@@ -141,15 +141,15 @@ studentSchema.methods.getHistorySummary = function () {
 };
 
 // ---- Usage Tracking Helpers ----
-function getDateKey(date = new Date()) {
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(date.getUTCDate()).padStart(2, '0');
+function getLocalDateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
 
 studentSchema.methods.getTodayUsedSeconds = function (now = new Date()) {
-  const key = getDateKey(now);
+  const key = getLocalDateKey(now);
   const used = Number(this.dailyUsageSecondsByDate?.get?.(key) || 0);
   return isNaN(used) ? 0 : used;
 };
@@ -162,7 +162,7 @@ studentSchema.methods.getTodayRemainingSeconds = function (now = new Date()) {
 
 studentSchema.methods.incrementUsage = function (seconds, now = new Date()) {
   if (!seconds || seconds <= 0) return this.getTodayUsedSeconds(now);
-  const key = getDateKey(now);
+  const key = getLocalDateKey(now);
   const prior = this.getTodayUsedSeconds(now);
   const limit = Number(this.dailyUsageSecondsLimit || 0);
   const allowedIncrement = Math.max(0, Math.min(seconds, Math.max(0, limit - prior)));
@@ -178,12 +178,26 @@ studentSchema.methods.startSessionIfNeeded = function (now = new Date()) {
 };
 
 studentSchema.methods.stopSessionAndAccrue = function (now = new Date()) {
-  if (this.currentSessionStartedAt) {
-    const elapsedMs = Math.max(0, now - this.currentSessionStartedAt);
-    const elapsedSec = Math.floor(elapsedMs / 1000);
-    this.incrementUsage(elapsedSec, now);
+  if (!this.currentSessionStartedAt) return;
+  const start = new Date(this.currentSessionStartedAt);
+  const end = new Date(now);
+  if (end <= start) {
     this.currentSessionStartedAt = null;
+    return;
   }
+
+  // Accrue usage day by day across local midnight boundaries
+  let cursor = new Date(start);
+  while (cursor < end) {
+    const nextMidnight = new Date(cursor);
+    nextMidnight.setHours(24, 0, 0, 0); // local midnight end of current day
+    const segmentEnd = nextMidnight < end ? nextMidnight : end;
+    const segmentSeconds = Math.floor((segmentEnd - cursor) / 1000);
+    this.incrementUsage(segmentSeconds, cursor);
+    cursor = segmentEnd;
+  }
+
+  this.currentSessionStartedAt = null;
 };
 
 studentSchema.methods.getUsageStatus = function (now = new Date()) {

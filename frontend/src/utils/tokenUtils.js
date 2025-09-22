@@ -26,3 +26,4 @@ export const removeTokenFromURL = () => {
 export const isTokenAuthMode = () => {
     return getTokenFromURL() !== null;
 };
+

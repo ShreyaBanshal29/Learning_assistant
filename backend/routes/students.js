@@ -110,6 +110,30 @@ router.post('/:student_id/usage/heartbeat', async (req, res) => {
   }
 });
 
+// Admin: reset today's usage for a student
+router.post('/:student_id/reset-usage', async (req, res) => {
+  try {
+    const { student_id } = req.params;
+    const student = await requireStudent(student_id);
+    // Reset today's entry and stop any active session
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const key = `${year}-${month}-${day}`;
+    if (student.dailyUsageSecondsByDate?.has?.(key)) {
+      student.dailyUsageSecondsByDate.set(key, 0);
+    }
+    student.currentSessionStartedAt = null;
+    await student.save();
+    const usage = student.getUsageStatus();
+    return res.status(200).json({ success: true, message: 'Usage reset for today', usage });
+  } catch (error) {
+    const status = error.status || 500;
+    return res.status(status).json({ success: false, message: error.message || 'Failed to reset usage' });
+  }
+});
+
 // Get student's chat history summary
 router.get('/:student_id/history', async (req, res) => {
   try {
