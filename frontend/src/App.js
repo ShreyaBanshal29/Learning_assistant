@@ -45,7 +45,8 @@ function AppContent() {
     createNewChat,
     addMessage,
     clearCurrentChat,
-    loading
+    loading,
+    usage
   } = useStudent();
 
   const messages = currentChat?.messages || [];
@@ -78,8 +79,15 @@ function AppContent() {
         await addMessage('assistant', stripMarkdown(assistantText), chatIndex);
       } catch (err) {
         console.error('AI error:', err);
-        const detail = err?.message ? ` Details: ${err.message}` : '';
-        await addMessage('assistant', stripMarkdown(`Sorry, there was an error contacting Gemini.${detail}`), chatIndex);
+        let errorMessage = 'Sorry, there was an error contacting Gemini.';
+
+        if (err?.message?.includes('Daily usage limit reached')) {
+          errorMessage = 'Daily usage limit reached. Please come back tomorrow.';
+        } else if (err?.message) {
+          errorMessage = `Sorry, there was an error: ${err.message}`;
+        }
+
+        await addMessage('assistant', stripMarkdown(errorMessage), chatIndex);
       }
     } catch (error) {
       console.error('Failed to send message:', error);
@@ -255,10 +263,10 @@ function AppContent() {
           hasStarted
             ? undefined
             : {
-              backgroundImage: `url(${process.env.PUBLIC_URL}/bg.jpeg)`,
+              backgroundImage: `url(${process.env.PUBLIC_URL}/bg.png)`,
               backgroundRepeat: "no-repeat",
               backgroundSize: "100%",
-              backgroundPosition: "bottom",
+              backgroundPosition: "center",
             }
         }
       >
@@ -275,9 +283,6 @@ function AppContent() {
                 <div className="user-id">ID: {student?.student_id || 'N/A'}</div>
               </div>
             </div>
-            <button className="logout-button" onClick={() => window.location.reload()}>
-              Logout
-            </button>
           </div>
         </div>
 
@@ -288,7 +293,6 @@ function AppContent() {
           <button className="pill" onClick={handleNewChat}>
             New Chat
           </button>
-
         </div>
 
         <ChatHistory
@@ -299,12 +303,24 @@ function AppContent() {
         <section className="chat">
           <div className="chat-box">
             <div className="chat-log">
-              {messages.map((m, i) => (
-                <div key={i} className="line">
-                  <span className="role">{m.role === "user" ? "You:" : "Assistant:"}</span>
-                  <span className="text">{m.content}</span>
-                </div>
-              ))}
+              {messages.map((m, i) => {
+                const isUser = m.role === "user";
+                const nextMessage = messages[i + 1];
+                const isLastMessage = i === messages.length - 1;
+                const shouldShowSeparator = isUser && (!nextMessage || nextMessage.role === "assistant");
+
+                return (
+                  <div key={i}>
+                    
+                      <span className="role">{isUser ? "You:" : "Assistant:"}</span>
+                      <span className="text">{m.content}</span>
+                      <div className="line">
+                    {shouldShowSeparator && !isLastMessage && (
+                      <div className="message-separator"></div>
+                    )}</div>
+                  </div>
+                );
+              })}
               {loading && (
                 <div className="line">
                   <span className="role">Assistant:</span>
@@ -340,6 +356,30 @@ function AppContent() {
                       </button>
                     </div>
                   ))}
+                </div>
+              )}
+              {usage?.remainingSeconds === 0 && (
+                <div className="usage-banner" style={{
+                  background: '#ffe6e6',
+                  color: '#a00',
+                  padding: '8px 12px',
+                  borderRadius: 8,
+                  marginBottom: 8,
+                  fontWeight: 600
+                }}>
+                  Daily time limit reached ({Math.round(usage.limitSeconds / 60)} minutes used). Please come back tomorrow.
+                </div>
+              )}
+              {usage?.remainingSeconds > 0 && usage?.remainingSeconds < 300 && (
+                <div className="usage-banner" style={{
+                  background: '#fff3cd',
+                  color: '#856404',
+                  padding: '8px 12px',
+                  borderRadius: 8,
+                  marginBottom: 8,
+                  fontWeight: 600
+                }}>
+                  ⚠️ Low usage remaining: {Math.round(usage.remainingSeconds / 60)} minutes left
                 </div>
               )}
               <div className="composer-input-row">

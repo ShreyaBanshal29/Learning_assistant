@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { studentAPI } from '../services/api';
+import { studentAPI, authAPI } from '../services/api';
+import { getTokenFromURL, removeTokenFromURL, isTokenAuthMode } from '../utils/tokenUtils';
 
 const StudentContext = createContext();
 
@@ -18,8 +19,43 @@ export const StudentProvider = ({ children }) => {
   const [currentChat, setCurrentChat] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [usage, setUsage] = useState({ usedSeconds: 0, remainingSeconds: 30 * 60, limitSeconds: 30 * 60 });
 
-  // Login function
+  // Token-based login function
+  const loginWithToken = async (usertoken) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await authAPI.verifyToken(usertoken);
+      setStudent(response.student);
+      setChatHistory(response.student.history);
+      setIsLoggedIn(true);
+
+      // Remove token from URL for security
+      removeTokenFromURL();
+
+      // fetch initial usage status
+      try {
+        const usageStatus = await studentAPI.getUsage(response.student.student_id);
+        if (usageStatus?.success) setUsage({
+          usedSeconds: usageStatus.usedSeconds,
+          remainingSeconds: usageStatus.remainingSeconds,
+          limitSeconds: usageStatus.limitSeconds
+        });
+      } catch (e) {
+        // non-fatal
+      }
+
+      return response;
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Traditional login function (for backward compatibility)
   const login = async (studentId, studentName) => {
     setLoading(true);
     setError(null);
@@ -28,6 +64,17 @@ export const StudentProvider = ({ children }) => {
       setStudent(response.student);
       setChatHistory(response.student.history);
       setIsLoggedIn(true);
+      // fetch initial usage status
+      try {
+        const usageStatus = await studentAPI.getUsage(studentId);
+        if (usageStatus?.success) setUsage({
+          usedSeconds: usageStatus.usedSeconds,
+          remainingSeconds: usageStatus.remainingSeconds,
+          limitSeconds: usageStatus.limitSeconds
+        });
+      } catch (e) {
+        // non-fatal
+      }
       // Best-effort sync of external data for contextual answers
       try {
         const token = process.env.REACT_APP_EXTERNAL_API_TOKEN;
@@ -52,6 +99,7 @@ export const StudentProvider = ({ children }) => {
     setChatHistory([]);
     setCurrentChat(null);
     setError(null);
+    setUsage({ usedSeconds: 0, remainingSeconds: 30 * 60, limitSeconds: 30 * 60 });
   };
 
   // Refresh chat history
@@ -64,6 +112,49 @@ export const StudentProvider = ({ children }) => {
       setError(err.message);
     }
   };
+
+  // Auto-authenticate with token on app load
+  useEffect(() => {
+    const handleTokenAuth = async () => {
+      if (isTokenAuthMode() && !isLoggedIn) {
+        const token = getTokenFromURL();
+        if (token) {
+          try {
+            await loginWithToken(token);
+          } catch (error) {
+            console.error('Token authentication failed:', error);
+            setError('Token authentication failed. Please try again.');
+          }
+        }
+      }
+    };
+
+    handleTokenAuth();
+  }, []); // Run only once on mount
+
+  // Heartbeat usage while logged in
+  useEffect(() => {
+    if (!student?.student_id) return;
+    let timerId;
+    const tick = async () => {
+      try {
+        const status = await studentAPI.usageHeartbeat(student.student_id, 15);
+        if (status?.success) {
+          setUsage({
+            usedSeconds: status.usedSeconds,
+            remainingSeconds: status.remainingSeconds,
+            limitSeconds: status.limitSeconds
+          });
+        }
+      } catch (e) {
+        // swallow
+      }
+    };
+    // fire immediately and then every 15s
+    tick();
+    timerId = setInterval(tick, 15000);
+    return () => clearInterval(timerId);
+  }, [student?.student_id]);
 
   // Load specific chat
   const loadChat = async (chatIndex) => {
@@ -116,6 +207,15 @@ export const StudentProvider = ({ children }) => {
         content
       );
       setCurrentChat(response.chat);
+      // optimistic: refresh usage after user message attempt
+      try {
+        const usageStatus = await studentAPI.getUsage(student.student_id);
+        if (usageStatus?.success) setUsage({
+          usedSeconds: usageStatus.usedSeconds,
+          remainingSeconds: usageStatus.remainingSeconds,
+          limitSeconds: usageStatus.limitSeconds
+        });
+      } catch { }
       return response.chat;
     } catch (err) {
       setError(err.message);
@@ -157,14 +257,17 @@ export const StudentProvider = ({ children }) => {
     setCurrentChat(null);
   };
 
+
   const value = {
     student,
     isLoggedIn,
     chatHistory,
     currentChat,
     loading,
+    usage,
     error,
     login,
+    loginWithToken,
     logout,
     refreshHistory,
     loadChat,

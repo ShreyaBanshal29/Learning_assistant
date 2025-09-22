@@ -53,6 +53,21 @@ const studentSchema = new mongoose.Schema({
     trim: true
   },
   history: [chatSchema],
+  // Track per-day usage in seconds. Keys are YYYY-MM-DD strings.
+  dailyUsageSecondsByDate: {
+    type: Map,
+    of: Number,
+    default: {}
+  },
+  // Optional server-maintained current session start timestamp
+  currentSessionStartedAt: {
+    type: Date,
+    default: null
+  },
+  dailyUsageSecondsLimit: {
+    type: Number,
+    default: 30 * 60 // 30 minutes
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -64,19 +79,19 @@ const studentSchema = new mongoose.Schema({
 });
 
 // Update the updatedAt field before saving
-studentSchema.pre('save', function(next) {
+studentSchema.pre('save', function (next) {
   this.updatedAt = Date.now();
   next();
 });
 
 // Update chat updatedAt when messages are modified
-chatSchema.pre('save', function(next) {
+chatSchema.pre('save', function (next) {
   this.updatedAt = Date.now();
   next();
 });
 
 // Method to get the next chat index for a student
-studentSchema.methods.getNextChatIndex = function() {
+studentSchema.methods.getNextChatIndex = function () {
   if (this.history.length === 0) {
     return 1;
   }
@@ -84,7 +99,7 @@ studentSchema.methods.getNextChatIndex = function() {
 };
 
 // Method to add a new chat
-studentSchema.methods.addChat = function(keyword) {
+studentSchema.methods.addChat = function (keyword) {
   const newIndex = this.getNextChatIndex();
   const newChat = {
     index: newIndex,
@@ -96,12 +111,12 @@ studentSchema.methods.addChat = function(keyword) {
 };
 
 // Method to get chat by index
-studentSchema.methods.getChatByIndex = function(index) {
+studentSchema.methods.getChatByIndex = function (index) {
   return this.history.find(chat => chat.index === index);
 };
 
 // Method to add message to a chat
-studentSchema.methods.addMessageToChat = function(chatIndex, role, content) {
+studentSchema.methods.addMessageToChat = function (chatIndex, role, content) {
   const chat = this.getChatByIndex(chatIndex);
   if (chat) {
     chat.messages.push({
@@ -116,13 +131,66 @@ studentSchema.methods.addMessageToChat = function(chatIndex, role, content) {
 };
 
 // Method to get chat history summary (just keywords and indices)
-studentSchema.methods.getHistorySummary = function() {
+studentSchema.methods.getHistorySummary = function () {
   return this.history.map(chat => ({
     index: chat.index,
     keyword: chat.keyword,
     messageCount: chat.messages.length,
     lastUpdated: chat.updatedAt
   })).sort((a, b) => b.lastUpdated - a.lastUpdated); // Sort by most recent first
+};
+
+// ---- Usage Tracking Helpers ----
+function getDateKey(date = new Date()) {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+studentSchema.methods.getTodayUsedSeconds = function (now = new Date()) {
+  const key = getDateKey(now);
+  const used = Number(this.dailyUsageSecondsByDate?.get?.(key) || 0);
+  return isNaN(used) ? 0 : used;
+};
+
+studentSchema.methods.getTodayRemainingSeconds = function (now = new Date()) {
+  const limit = Number(this.dailyUsageSecondsLimit || 0);
+  const used = this.getTodayUsedSeconds(now);
+  return Math.max(0, limit - used);
+};
+
+studentSchema.methods.incrementUsage = function (seconds, now = new Date()) {
+  if (!seconds || seconds <= 0) return this.getTodayUsedSeconds(now);
+  const key = getDateKey(now);
+  const prior = this.getTodayUsedSeconds(now);
+  const limit = Number(this.dailyUsageSecondsLimit || 0);
+  const allowedIncrement = Math.max(0, Math.min(seconds, Math.max(0, limit - prior)));
+  const next = prior + allowedIncrement;
+  this.dailyUsageSecondsByDate.set(key, next);
+  return next;
+};
+
+studentSchema.methods.startSessionIfNeeded = function (now = new Date()) {
+  if (!this.currentSessionStartedAt) {
+    this.currentSessionStartedAt = now;
+  }
+};
+
+studentSchema.methods.stopSessionAndAccrue = function (now = new Date()) {
+  if (this.currentSessionStartedAt) {
+    const elapsedMs = Math.max(0, now - this.currentSessionStartedAt);
+    const elapsedSec = Math.floor(elapsedMs / 1000);
+    this.incrementUsage(elapsedSec, now);
+    this.currentSessionStartedAt = null;
+  }
+};
+
+studentSchema.methods.getUsageStatus = function (now = new Date()) {
+  const used = this.getTodayUsedSeconds(now);
+  const limit = Number(this.dailyUsageSecondsLimit || 0);
+  const remaining = Math.max(0, limit - used);
+  return { usedSeconds: used, remainingSeconds: remaining, limitSeconds: limit };
 };
 
 const Student = mongoose.model('Student', studentSchema);

@@ -38,6 +38,30 @@ router.post('/generate', async (req, res) => {
       return res.status(500).json({ success: false, message: 'GEMINI_API_KEY is not set' });
     }
 
+    // Enforce usage limit if student_id provided
+    if (student_id) {
+      try {
+        const student = await Student.findOne({ student_id });
+        if (student) {
+          const usage = student.getUsageStatus();
+          if (usage.remainingSeconds <= 0) {
+            return res.status(429).json({
+              success: false,
+              message: 'Daily usage limit reached. Please come back tomorrow.',
+              usage: {
+                usedSeconds: usage.usedSeconds,
+                remainingSeconds: usage.remainingSeconds,
+                limitSeconds: usage.limitSeconds,
+                usedMinutes: Math.round(usage.usedSeconds / 60),
+                remainingMinutes: Math.round(usage.remainingSeconds / 60),
+                limitMinutes: Math.round(usage.limitSeconds / 60)
+              }
+            });
+          }
+        }
+      } catch { }
+    }
+
     // Build LangChain chat model
     const chat = new ChatGoogleGenerativeAI({
       apiKey,
@@ -64,7 +88,7 @@ router.post('/generate', async (req, res) => {
             else lcMessages.push(new AIMessage(m.content));
           }
         }
-      } catch {}
+      } catch { }
     }
 
     // Fetch contextual student data snapshot
@@ -108,7 +132,7 @@ router.post('/generate', async (req, res) => {
           assignmentsSummary: summarizeAssignments(extractAssignmentsArray(ext.assignments)),
           examList: ext.examList,
           latestExamData: (() => {
-            const lastExamId = Array.isArray(ext.examList?.data) && ext.examList.data.length ? ext.examList.data[ext.examList.data.length-1]?.id || ext.examList.data[ext.examList.data.length-1]?.ExamId : undefined;
+            const lastExamId = Array.isArray(ext.examList?.data) && ext.examList.data.length ? ext.examList.data[ext.examList.data.length - 1]?.id || ext.examList.data[ext.examList.data.length - 1]?.ExamId : undefined;
             if (!lastExamId) return undefined;
             return ext.examDataByExamId?.get(String(lastExamId));
           })(),
@@ -133,10 +157,10 @@ router.post('/generate', async (req, res) => {
       message.toLowerCase().includes('api key') || message.toLowerCase().includes('invalid')
         ? 'The API key may be missing or invalid.'
         : message.toLowerCase().includes('quota')
-        ? 'Quota exceeded for your Gemini API key.'
-        : message.toLowerCase().includes('network')
-        ? 'Network issue while contacting Gemini.'
-        : undefined;
+          ? 'Quota exceeded for your Gemini API key.'
+          : message.toLowerCase().includes('network')
+            ? 'Network issue while contacting Gemini.'
+            : undefined;
     return res.status(500).json({ success: false, message, hint });
   }
 });

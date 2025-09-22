@@ -5,6 +5,17 @@ import fetch from 'node-fetch';
 
 const router = express.Router();
 
+// Helper: fetch or 404 student
+async function requireStudent(student_id) {
+  const student = await Student.findOne({ student_id });
+  if (!student) {
+    const err = new Error('Student not found');
+    err.status = 404;
+    throw err;
+  }
+  return student;
+}
+
 // Student login/authentication endpoint
 router.post('/login', async (req, res) => {
   try {
@@ -62,6 +73,40 @@ router.post('/login', async (req, res) => {
       message: 'Internal server error during login',
       error: error.message
     });
+  }
+});
+
+// ----- Usage tracking endpoints -----
+// Get today's usage status
+router.get('/:student_id/usage', async (req, res) => {
+  try {
+    const { student_id } = req.params;
+    const student = await requireStudent(student_id);
+    const status = student.getUsageStatus();
+    return res.status(200).json({ success: true, ...status });
+  } catch (error) {
+    const status = error.status || 500;
+    return res.status(status).json({ success: false, message: error.message || 'Failed to get usage' });
+  }
+});
+
+// Heartbeat: increment usage by N seconds and return remaining
+router.post('/:student_id/usage/heartbeat', async (req, res) => {
+  try {
+    const { student_id } = req.params;
+    const { seconds = 15 } = req.body || {};
+    const increment = Math.max(0, Math.min(300, Number(seconds) || 0)); // cap to 5 minutes
+    const student = await requireStudent(student_id);
+    // accrue any active session up to now then start a new session slice
+    student.stopSessionAndAccrue(new Date());
+    student.incrementUsage(increment);
+    student.startSessionIfNeeded(new Date());
+    await student.save();
+    const status = student.getUsageStatus();
+    return res.status(200).json({ success: true, ...status });
+  } catch (error) {
+    const status = error.status || 500;
+    return res.status(status).json({ success: false, message: error.message || 'Failed to update usage' });
   }
 });
 
@@ -223,6 +268,23 @@ router.post('/:student_id/chat/:index/message', async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Student not found'
+      });
+    }
+
+    // Enforce usage limit: user messages are blocked when time is exhausted
+    const usage = student.getUsageStatus();
+    if (role === 'user' && usage.remainingSeconds <= 0) {
+      return res.status(429).json({
+        success: false,
+        message: 'Daily usage limit reached. Please come back tomorrow.',
+        usage: {
+          usedSeconds: usage.usedSeconds,
+          remainingSeconds: usage.remainingSeconds,
+          limitSeconds: usage.limitSeconds,
+          usedMinutes: Math.round(usage.usedSeconds / 60),
+          remainingMinutes: Math.round(usage.remainingSeconds / 60),
+          limitMinutes: Math.round(usage.limitSeconds / 60)
+        }
       });
     }
 
@@ -401,7 +463,10 @@ router.post('/:student_id/sync', async (req, res) => {
       try {
         const r = await fetch(url, {
           timeout: 20000,
-          headers: providedToken ? { 'X-API-TOKEN': providedToken } : undefined
+          headers: {
+            'X-API-TOKEN': providedToken || 'RvpA6SuRQyydHIeZkyxbYViBmj5jVkODaTvZc24dbjE9XoKpxSM3KQy15zowmF0xaMkHcriCbt4abuMtvms54wtmWoXxESGxcvLeKvIM9ZFLblzzogMds9E8z3toxCYlE9kws9hqOAFbQo0wjHLESaX2FHcufLMlXhjx',
+            'Content-Type': 'application/json'
+          }
         });
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return await r.json();

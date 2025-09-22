@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useStudent } from '../context/StudentContext';
+import { isTokenAuthMode } from '../utils/tokenUtils';
 
 const Login = () => {
     const [studentId, setStudentId] = useState('');
@@ -7,7 +8,8 @@ const Login = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
 
-    const { login } = useStudent();
+    const { login, loading } = useStudent();
+    const isTokenMode = isTokenAuthMode();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -29,11 +31,48 @@ const Login = () => {
         }
     };
 
+    // Show loading state for token authentication
+    if (isTokenMode && loading) {
+        return (
+            <div className="login-container">
+                <div className="login-card">
+                    <div className="login-header">
+                        <h2>Welcome to Learning Assistant</h2>
+                        <p>Authenticating...</p>
+                    </div>
+                    <div className="loading-spinner">
+                        <div className="spinner"></div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Show error state for token authentication
+    if (isTokenMode && error) {
+        return (
+            <div className="login-container">
+                <div className="login-card">
+                    <div className="login-header">
+                        <h2>Welcome to Learning Assistant</h2>
+                        <p>Authentication Error</p>
+                    </div>
+                    <div className="error-message">
+                        {error}
+                    </div>
+                    <div className="login-footer">
+                        <p>Please contact support if this issue persists.</p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Show traditional login form for non-token mode
     return (
         <div className="login-container">
             <div className="login-card">
                 <div className="login-header">
-                    
                     <h2>Welcome to Learning Assistant</h2>
                     <p>Enter your credentials</p>
                 </div>
@@ -80,9 +119,9 @@ const Login = () => {
                     </button>
                 </form>
 
-                {/* <div className="login-footer">
+                <div className="login-footer">
                     <p>New students will be automatically registered</p>
-                </div> */}
+                </div>
             </div>
         </div>
     );

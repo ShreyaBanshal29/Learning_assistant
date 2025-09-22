@@ -2,7 +2,8 @@ import axios from 'axios';
 
 // Create axios instance with base URL
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000/api',
+  // Use relative path with CRA proxy during development; env can override
+  baseURL: process.env.REACT_APP_API_BASE_URL || '/api',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -20,6 +21,26 @@ export const studentAPI = {
       return response.data;
     } catch (error) {
       throw new Error(error.response?.data?.message || 'Login failed');
+    }
+  },
+
+  // Get usage status for today
+  getUsage: async (studentId) => {
+    try {
+      const response = await api.get(`/students/${studentId}/usage`);
+      return response.data;
+    } catch (error) {
+      throw new Error(error.response?.data?.message || 'Failed to fetch usage');
+    }
+  },
+
+  // Heartbeat to accrue usage seconds
+  usageHeartbeat: async (studentId, seconds = 15) => {
+    try {
+      const response = await api.post(`/students/${studentId}/usage/heartbeat`, { seconds });
+      return response.data;
+    } catch (error) {
+      throw new Error(error.response?.data?.message || 'Failed to update usage');
     }
   },
 
@@ -104,9 +125,25 @@ export const studentAPI = {
       throw new Error(error.response?.data?.message || 'Failed to sync external data');
     }
   },
+
 };
 
 export default api;
+
+// Auth API
+export const authAPI = {
+  // Verify token with main website
+  verifyToken: async (usertoken) => {
+    try {
+      const response = await api.post('/auth/verify-token', {
+        usertoken: usertoken,
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(error.response?.data?.message || 'Token verification failed');
+    }
+  },
+};
 
 // AI API
 export const aiAPI = {
