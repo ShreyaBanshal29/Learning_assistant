@@ -2,6 +2,8 @@ import mongoose from 'mongoose';
 
 const studentExternalSchema = new mongoose.Schema({
   student_id: { type: String, required: true, index: true, unique: true },
+  // Documents auto-delete after expiresAt due to TTL index below
+  expiresAt: { type: Date, default: null },
   sourceIds: {
     profileId: { type: String },
     attendanceStudentId: { type: String },
@@ -20,10 +22,14 @@ const studentExternalSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
-studentExternalSchema.pre('save', function(next) {
+studentExternalSchema.pre('save', function (next) {
   this.updatedAt = Date.now();
   next();
 });
+
+// TTL index: when expiresAt is reached, MongoDB will delete the document
+// expireAfterSeconds: 0 means expire exactly at expiresAt
+studentExternalSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 const StudentExternal = mongoose.model('StudentExternal', studentExternalSchema);
 

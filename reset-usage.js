@@ -1,7 +1,7 @@
 // Script to reset usage for a student
 import fetch from 'node-fetch';
 
-const STUDENT_ID = '123'; // Change this to the student ID you want to reset
+const STUDENT_ID = '45'; // Change this to the student ID you want to reset
 const API_BASE = 'http://localhost:5000/api';
 
 async function resetUsage() {

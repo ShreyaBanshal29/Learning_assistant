@@ -207,6 +207,44 @@ studentSchema.methods.getUsageStatus = function (now = new Date()) {
   return { usedSeconds: used, remainingSeconds: remaining, limitSeconds: limit };
 };
 
+// ---- Retention / Pruning Helpers ----
+studentSchema.methods.pruneHistoryByDays = function (days = 30) {
+  const safeDays = Math.max(0, Number(days) || 0);
+  if (safeDays === 0) return; // 0 means keep all
+  const cutoff = new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000);
+  this.history = this.history.filter(chat => {
+    try {
+      const updatedAt = new Date(chat.updatedAt || chat.createdAt || 0);
+      return updatedAt >= cutoff;
+    } catch {
+      return true;
+    }
+  });
+};
+
+studentSchema.methods.pruneUsageByDays = function (days = 30) {
+  const safeDays = Math.max(0, Number(days) || 0);
+  if (safeDays === 0) return;
+  const cutoff = new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000);
+  // Keys are YYYY-MM-DD, compare by parsing back to Date at local midnight
+  if (this.dailyUsageSecondsByDate && typeof this.dailyUsageSecondsByDate.forEach === 'function') {
+    const toDelete = [];
+    this.dailyUsageSecondsByDate.forEach((_, key) => {
+      try {
+        const [y, m, d] = String(key).split('-').map(Number);
+        const keyDate = new Date(y, (m || 1) - 1, d || 1);
+        if (keyDate < cutoff) toDelete.push(key);
+      } catch { }
+    });
+    for (const k of toDelete) this.dailyUsageSecondsByDate.delete(k);
+  }
+};
+
+studentSchema.methods.pruneDataByDays = function (days = 30) {
+  this.pruneHistoryByDays(days);
+  this.pruneUsageByDays(days);
+};
+
 const Student = mongoose.model('Student', studentSchema);
 
 export default Student;

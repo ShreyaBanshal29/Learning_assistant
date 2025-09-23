@@ -38,6 +38,9 @@ router.post('/login', async (req, res) => {
         student_name,
         history: []
       });
+      // Prune old data based on retention window
+      const days = Number(process.env.RETENTION_DAYS || 30);
+      student.pruneDataByDays(days);
       await student.save();
 
       return res.status(201).json({
@@ -53,8 +56,21 @@ router.post('/login', async (req, res) => {
       // Update student name if it has changed
       if (student.student_name !== student_name) {
         student.student_name = student_name;
+        const days = Number(process.env.RETENTION_DAYS || 30);
+        student.pruneDataByDays(days);
         await student.save();
       }
+
+      // Refresh StudentExternal TTL expiry (15 minutes sliding window)
+      try {
+        const ttlMinutes = Number(process.env.EXTERNAL_TTL_MINUTES || 15);
+        const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000);
+        await StudentExternal.updateOne(
+          { student_id },
+          { $set: { expiresAt } },
+          { upsert: true }
+        );
+      } catch { }
 
       return res.status(200).json({
         success: true,
@@ -101,7 +117,20 @@ router.post('/:student_id/usage/heartbeat', async (req, res) => {
     student.stopSessionAndAccrue(new Date());
     student.incrementUsage(increment);
     student.startSessionIfNeeded(new Date());
+    // Prune old data each heartbeat
+    const days = Number(process.env.RETENTION_DAYS || 30);
+    student.pruneDataByDays(days);
     await student.save();
+    // Refresh StudentExternal TTL expiry window as user is active
+    try {
+      const ttlMinutes = Number(process.env.EXTERNAL_TTL_MINUTES || 15);
+      const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000);
+      await StudentExternal.updateOne(
+        { student_id },
+        { $set: { expiresAt } },
+        { upsert: true }
+      );
+    } catch { }
     const status = student.getUsageStatus();
     return res.status(200).json({ success: true, ...status });
   } catch (error) {
