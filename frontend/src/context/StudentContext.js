@@ -207,6 +207,10 @@ export const StudentProvider = ({ children }) => {
         content
       );
       setCurrentChat(response.chat);
+      // Ensure history sidebar reflects latest message counts and ordering
+      try {
+        await refreshHistory();
+      } catch { }
       // optimistic: refresh usage after user message attempt
       try {
         const usageStatus = await studentAPI.getUsage(student.student_id);

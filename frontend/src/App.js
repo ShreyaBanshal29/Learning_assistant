@@ -306,18 +306,17 @@ function AppContent() {
               {messages.map((m, i) => {
                 const isUser = m.role === "user";
                 const nextMessage = messages[i + 1];
-                const isLastMessage = i === messages.length - 1;
-                const shouldShowSeparator = isUser && (!nextMessage || nextMessage.role === "assistant");
+                const shouldShowSeparator = m.role === "assistant" && nextMessage && nextMessage.role === "user";
 
                 return (
                   <div key={i}>
-                    
+                    <div className="line">
                       <span className="role">{isUser ? "You:" : "Assistant:"}</span>
                       <span className="text">{m.content}</span>
-                      <div className="line">
-                    {shouldShowSeparator && !isLastMessage && (
+                    </div>
+                    {shouldShowSeparator && (
                       <div className="message-separator"></div>
-                    )}</div>
+                    )}
                   </div>
                 );
               })}
