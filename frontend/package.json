@@ -14,7 +14,7 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "set \"HOST=localhost\" && set \"DANGEROUSLY_DISABLE_HOST_CHECK=true\" && set \"WDS_ALLOWED_HOSTS=all\" && set PORT=3002 && react-scripts start",
+    "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
