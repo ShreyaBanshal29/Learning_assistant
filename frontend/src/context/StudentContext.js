@@ -28,7 +28,7 @@ export const StudentProvider = ({ children }) => {
     try {
       const response = await authAPI.verifyToken(usertoken);
       setStudent(response.student);
-      setChatHistory(response.student.history);
+     setChatHistory(response.student.history || []);
       setIsLoggedIn(true);
 
       // Remove token from URL for security
@@ -62,7 +62,7 @@ export const StudentProvider = ({ children }) => {
     try {
       const response = await studentAPI.login(studentId, studentName);
       setStudent(response.student);
-      setChatHistory(response.student.history);
+      setChatHistory(response.student.history || []);
       setIsLoggedIn(true);
       // fetch initial usage status
       try {
