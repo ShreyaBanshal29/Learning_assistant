@@ -2,12 +2,10 @@ import axios from 'axios';
 
 // Create axios instance with base URL
 const api = axios.create({
-  // Use relative path with CRA proxy during development; env can override
-  baseURL: process.env.REACT_APP_API_BASE_URL || '/api',
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  baseURL: process.env.REACT_APP_API_BASE_URL || 'https://apicounsellorai.alnada.eprime.app/api',
+  headers: { 'Content-Type': 'application/json' },
 });
+
 
 // Student API functions
 export const studentAPI = {
