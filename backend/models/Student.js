@@ -65,9 +65,9 @@ const studentSchema = new mongoose.Schema({
     default: null
   },
   dailyUsageSecondsLimit: {
-  type: Number,
-  default: Number(process.env.DAILY_USAGE_LIMIT_SECONDS) || 30*60
-},
+    type: Number,
+    default: 48 * 60 * 60 // 30 minutes
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -161,15 +161,13 @@ studentSchema.methods.getTodayRemainingSeconds = function (now = new Date()) {
 };
 
 studentSchema.methods.incrementUsage = function (seconds, now = new Date()) {
-  if (!seconds || seconds <= 0) return this.getTodayUsedSeconds(now);
+  if (!seconds || seconds <= 0) return 0;
   const key = getLocalDateKey(now);
-  const prior = this.getTodayUsedSeconds(now);
-  const limit = Number(this.dailyUsageSecondsLimit || 0);
-  const allowedIncrement = Math.max(0, Math.min(seconds, Math.max(0, limit - prior)));
-  const next = prior + allowedIncrement;
-  this.dailyUsageSecondsByDate.set(key, next);
-  return next;
+  const prior = Number(this.dailyUsageSecondsByDate.get(key) || 0);
+  this.dailyUsageSecondsByDate.set(key, prior + seconds);
+  return prior + seconds;
 };
+
 
 studentSchema.methods.startSessionIfNeeded = function (now = new Date()) {
   if (!this.currentSessionStartedAt) {
@@ -186,11 +184,10 @@ studentSchema.methods.stopSessionAndAccrue = function (now = new Date()) {
     return;
   }
 
-  // Accrue usage day by day across local midnight boundaries
   let cursor = new Date(start);
   while (cursor < end) {
     const nextMidnight = new Date(cursor);
-    nextMidnight.setHours(24, 0, 0, 0); // local midnight end of current day
+    nextMidnight.setHours(24, 0, 0, 0);
     const segmentEnd = nextMidnight < end ? nextMidnight : end;
     const segmentSeconds = Math.floor((segmentEnd - cursor) / 1000);
     this.incrementUsage(segmentSeconds, cursor);
@@ -200,12 +197,15 @@ studentSchema.methods.stopSessionAndAccrue = function (now = new Date()) {
   this.currentSessionStartedAt = null;
 };
 
+
 studentSchema.methods.getUsageStatus = function (now = new Date()) {
-  const used = this.getTodayUsedSeconds(now);
-  const limit = Number(this.dailyUsageSecondsLimit || 0);
+  // Total seconds limit: 48 hours
+  const limit = 48 * 60 * 60; // 48 hours in seconds
+  const used = Array.from(this.dailyUsageSecondsByDate.values()).reduce((a, b) => a + b, 0);
   const remaining = Math.max(0, limit - used);
   return { usedSeconds: used, remainingSeconds: remaining, limitSeconds: limit };
 };
+
 
 // ---- Retention / Pruning Helpers ----
 studentSchema.methods.pruneHistoryByDays = function (days = 30) {
