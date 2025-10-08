@@ -272,7 +272,10 @@ function AppContent() {
       >
         <div className="topbar">
 
-          <div className="title">Learning Assistant</div>
+          <div className="title-container">
+  <div className="title">Alithea</div>
+  <div className="subtitle">Revealing truth through knowledge</div>
+</div>
           <div className="user-info">
             <div className="user-details">
               <div className="avatar">
@@ -400,22 +403,22 @@ function AppContent() {
                   disabled={loading || isCreatingChat}
                 />
                 <div className="composer-actions">
-                  <button
+                  {/* <button
                     className={`mic ${isRecording ? 'recording' : ''}`}
                     title="Voice input"
                     onClick={isRecording ? stopRecording : startRecording}
                     disabled={loading || isCreatingChat}
                   >
                     {isRecording ? '⏹️' : '🎤'}
-                  </button>
-                  <button
+                  </button> */}
+                  {/* <button
                     className="attach"
                     title="Attach file"
                     onClick={openFileDialog}
                     disabled={loading || isCreatingChat}
                   >
                     📎
-                  </button>
+                  </button> */}
                   <button
                     className="send"
                     onClick={handleSend}

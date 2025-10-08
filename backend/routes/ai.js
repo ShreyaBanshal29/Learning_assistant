@@ -7,26 +7,26 @@ import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
 
 dotenv.config();
+const INSTITUTE_NAME = process.env.INSTITUTE_NAME || 'Al Nada Coaching Institute';
+const ASSISTANT_NAME = process.env.ASSISTANT_NAME || 'Alithea';
 
 const router = express.Router();
 
 // Base system prompt for Al Nada Coaching Institute Learning Assistant
-const BASE_SYSTEM_PROMPT = (
-  [
-    'You are a Learning Assistant for Al Nada Coaching Institute.',
-    'Your job is to guide students, answer their queries about academics, attendance, assignments, and exams, and provide helpful learning support.',
-    '',
-    'Rules:',
-    '1. Always respond as a teacher/assistant of Al Nada.',
-    '2. Never reveal that you are an AI, Gemini, or that data is being sent to you.',
-    '3. Use the provided student data silently — do not mention it unless needed to answer the student.',
-    '4. Be polite, supportive, and professional. Use a warm, educational tone.'
-  ].join('\n')
-);
+const BASE_SYSTEM_PROMPT = [
+  `You are a Learning Assistant (${ASSISTANT_NAME}) for ${INSTITUTE_NAME}.`,
+  `Your job is to guide students, answer their queries about academics, attendance, assignments, and exams, and provide helpful learning support.`,
+  '',
+  'Rules:',
+  '1. Always respond as a teacher/assistant of the institute.',
+  '2. Never reveal that you are an AI, Gemini, or that data is being sent to you.',
+  '3. Use the provided student data silently — do not mention it unless needed to answer the student.',
+  '4. Be polite, supportive, and professional. Use a warm, educational tone.'
+].join('\n');
 
 router.get('/ping', (req, res) => {
   const apiKeySet = Boolean(process.env.GEMINI_API_KEY);
-  const modelName = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+  const modelName = process.env.GEMINI_MODEL || 'gemini-1.5-flash-latest';
   const nodeVersion = process.version;
   return res.status(200).json({
     success: true,
@@ -46,7 +46,7 @@ router.post('/generate', async (req, res) => {
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
-    const modelName = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+    const modelName = process.env.GEMINI_MODEL || 'gemini-1.5-flash-latest';
 
     if (!apiKey) {
       return res.status(500).json({ success: false, message: 'GEMINI_API_KEY is not set' });
@@ -154,14 +154,28 @@ router.post('/generate', async (req, res) => {
           })(),
           enrollment: ext.enrollment
         };
-        contextSnippet = `Contextual student data (JSON):\n${JSON.stringify(summary).slice(0, 5000)}`; // cap size
+        contextSnippet = `Contextual student data (JSON):\n${JSON.stringify(summary).slice(0, 2000)}`; // cap size
       }
     }
 
     // Append current user question
     lcMessages.push(new HumanMessage(`${contextSnippet ? contextSnippet + '\n\n' : ''}User question: ${prompt}`));
 
-    const result = await chat.invoke(lcMessages);
+
+async function safeInvoke(chat, messages, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const result = await chat.invoke(messages);
+      return result;
+    } catch (err) {
+      console.error(`Attempt ${i + 1} failed:`, err.message);
+      if (i === retries - 1) throw err;
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  }
+}
+    const result = await safeInvoke(chat, lcMessages.slice(-6));
+
     const text = result?.content ?? '';
 
     return res.status(200).json({ success: true, text, model: modelName, provider: 'gemini', usedContext: Boolean(contextSnippet) });
@@ -177,7 +191,12 @@ router.post('/generate', async (req, res) => {
           : message.toLowerCase().includes('network')
             ? 'Network issue while contacting Gemini.'
             : undefined;
-    return res.status(500).json({ success: false, message, hint });
+    return res.status(500).json({
+  success: false,
+  message,
+  hint,
+  errorType: error?.response?.statusText || 'Unknown Error'
+});
   }
 });
 
