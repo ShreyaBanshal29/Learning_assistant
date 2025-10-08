@@ -63,7 +63,7 @@ router.post('/login', async (req, res) => {
 
       // Refresh StudentExternal TTL expiry (15 minutes sliding window)
       try {
-        const ttlMinutes = Number(process.env.EXTERNAL_TTL_MINUTES || 15);
+        const ttlMinutes = Number(process.env.EXTERNAL_TTL_MINUTES || 2880);
         const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000);
         await StudentExternal.updateOne(
           { student_id },
