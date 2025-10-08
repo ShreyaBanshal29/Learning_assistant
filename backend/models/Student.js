@@ -65,9 +65,9 @@ const studentSchema = new mongoose.Schema({
     default: null
   },
   dailyUsageSecondsLimit: {
-    type: Number,
-    default: 30 * 60 // 30 minutes
-  },
+  type: Number,
+  default: Number(process.env.DAILY_USAGE_LIMIT_SECONDS) || 30*60
+},
   createdAt: {
     type: Date,
     default: Date.now
