@@ -403,22 +403,22 @@ function AppContent() {
                   disabled={loading || isCreatingChat}
                 />
                 <div className="composer-actions">
-                  {/* <button
+                   <button
                     className={`mic ${isRecording ? 'recording' : ''}`}
                     title="Voice input"
                     onClick={isRecording ? stopRecording : startRecording}
                     disabled={loading || isCreatingChat}
                   >
                     {isRecording ? '⏹️' : '🎤'}
-                  </button> */}
-                  {/* <button
+                  </button> 
+                   <button
                     className="attach"
                     title="Attach file"
                     onClick={openFileDialog}
                     disabled={loading || isCreatingChat}
                   >
                     📎
-                  </button> */}
+                  </button> 
                   <button
                     className="send"
                     onClick={handleSend}
