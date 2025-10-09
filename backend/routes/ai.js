@@ -174,7 +174,7 @@ async function safeInvoke(chat, messages, retries = 3) {
     }
   }
 }
-    const result = await safeInvoke(chat, lcMessages.slice(-6));
+    const result = await safeInvoke(chat, lcMessages);
 
     const text = result?.content ?? '';
 
